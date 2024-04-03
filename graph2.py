@@ -56,22 +56,22 @@ def start(message):
 @bot.message_handler(func=lambda message: message.text == "🛒 Корзина")
 def show_cart(message):
     user_id = message.chat.id
-
-    # Проверяем, есть ли корзина для данного пользователя
     if user_id in user_cart and user_cart[user_id]:
-        # Получаем содержимое корзины пользователя
         cart_content = user_cart[user_id]
-        # Формируем текст для отображения содержимого корзины
         cart_text = "Содержимое вашей корзины:\n\n"
-        for index, product in enumerate(cart_content, start=1):
-            product_name = product.split(':')[1]  # Извлекаем вторую часть строки после разделения
-            cart_text += f"{index}. {product_name}\n"
-        # Создаем клавиатуру с кнопкой "Очистить корзину"
+        total_price = 0
+        for index, (name, size, price) in enumerate(cart_content, start=1):
+            cart_text += f"{index}. {name} - Размер: {size} - Цена: {price} тенге.\n"
+            total_price += price
+        cart_text += f"\nИтог: {total_price} тенге."
+
+        # Add a button to clear the cart
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("Очистить корзину", callback_data='clear_cart'))
         bot.send_message(user_id, cart_text, reply_markup=markup)
     else:
         bot.send_message(user_id, "Ваша корзина пуста")
+
 
 # Обработчик кнопки "Корзина"
 
@@ -93,8 +93,6 @@ def clear_cart(call):
     else:
         # If the cart is already empty, just close the callback query popup
         bot.answer_callback_query(call.id, 'Ваша корзина уже пуста')
-
-
 
 @bot.message_handler(func=lambda message: message.text == "✍️ Отзывы")
 def send_reviews(message):
@@ -151,18 +149,24 @@ def select_model(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_to_cart_'))
 def add_to_cart(call):
     data_parts = call.data.split('_')
-    product_name = data_parts[2]
-    product_size = data_parts[3]
+    product_name = data_parts[3]
+    product_size = data_parts[4]
     user_id = call.message.chat.id
 
-    # Проверяем, есть ли корзина для данного пользователя, и создаем ее, если она отсутствует
-    if user_id not in user_cart:
-        user_cart[user_id] = []
+    # Find the product details based on name and size
+    product_details = next(
+        (product for product in products if product['name'] == product_name and str(product['size']) == product_size),
+        None)
+    if product_details:
+        if user_id not in user_cart:
+            user_cart[user_id] = []
 
-    # Добавляем товар в корзину пользователя
-    user_cart[user_id].append(f"{product_name}:{product_size}")
+        # Append the product details as a tuple (name, size, price)
+        user_cart[user_id].append((product_name, product_size, product_details['price']))
+        bot.answer_callback_query(call.id, 'Товар добавлен в корзину')
+    else:
+        bot.answer_callback_query(call.id, 'Ошибка: товар не найден.')
 
-    bot.answer_callback_query(call.id, 'Товар добавлен в корзину')
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('size_'))
 def select_size(call):
