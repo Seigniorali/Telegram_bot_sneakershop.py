@@ -9,7 +9,6 @@ import pandas as pd
 # Словарь для хранения состояния выбора пользователя
 user_state = {}
 user_cart = {}
-
 def load_products_from_excel(file_path):
     # Чтение файла Excel
     df = pd.read_excel(file_path)
@@ -53,7 +52,7 @@ def start(message):
             "✍️ Отзывы - поделитесь своими впечатлениями о покупке и прочитайте мнения других покупателей.\n"
             "🛒 Корзина - просмотрите выбранные вами модели перед оформлением заказа.")
     bot.send_message(message.chat.id, text, reply_markup=markup, parse_mode='Markdown')
-# Обработчик кнопки "Корзина"
+# # Обработчик кнопки "Корзина"
 @bot.message_handler(func=lambda message: message.text == "🛒 Корзина")
 def show_cart(message):
     user_id = message.chat.id
@@ -67,9 +66,34 @@ def show_cart(message):
         for index, product in enumerate(cart_content, start=1):
             product_name = product.split(':')[1]  # Извлекаем вторую часть строки после разделения
             cart_text += f"{index}. {product_name}\n"
-        bot.send_message(user_id, cart_text)
+        # Создаем клавиатуру с кнопкой "Очистить корзину"
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("Очистить корзину", callback_data='clear_cart'))
+        bot.send_message(user_id, cart_text, reply_markup=markup)
     else:
         bot.send_message(user_id, "Ваша корзина пуста")
+
+# Обработчик кнопки "Корзина"
+
+# Добавляем обработчик для кнопки "Очистить корзину"
+# Existing clear_cart function
+@bot.callback_query_handler(func=lambda call: call.data == 'clear_cart')
+def clear_cart(call):
+    user_id = call.message.chat.id
+    # Check if the cart for the user exists and has items
+    if user_id in user_cart and user_cart[user_id]:
+        # Clear the user's cart
+        user_cart[user_id] = []
+        # Inform the user that the cart has been cleared
+        bot.answer_callback_query(call.id, 'Корзина очищена')
+        # Replace the existing message with "Ваша корзина пуста"
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text="Ваша корзина пуста")
+    else:
+        # If the cart is already empty, just close the callback query popup
+        bot.answer_callback_query(call.id, 'Ваша корзина уже пуста')
+
 
 
 @bot.message_handler(func=lambda message: message.text == "✍️ Отзывы")
@@ -78,6 +102,7 @@ def send_reviews(message):
     reviews_link = 'https://t.me/sneakers_ali'
     # Отправляем сообщение с ссылкой
     bot.send_message(message.chat.id, f"Посмотрите наши отзывы здесь: {reviews_link}")
+
 
 
 # Функция для вывода каталога
@@ -89,6 +114,9 @@ def catalog(message):
     for model_name in unique_models:
         markup.add(types.InlineKeyboardButton(model_name, callback_data='model_' + model_name))
     bot.send_message(message.chat.id, "Выберите модель:", reply_markup=markup)
+
+
+
 
 @bot.callback_query_handler(func=lambda call: call.data == 'back_to_catalog')
 def back_to_catalog(call):
@@ -118,7 +146,8 @@ def select_model(call):
                           text="Выберите размер:", reply_markup=markup)
 
 
-# Изменяем обработчик callback для кнопки "Добавить в корзину"
+
+# # Изменяем обработчик callback для кнопки "Добавить в корзину"
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_to_cart_'))
 def add_to_cart(call):
     data_parts = call.data.split('_')
@@ -134,7 +163,6 @@ def add_to_cart(call):
     user_cart[user_id].append(f"{product_name}:{product_size}")
 
     bot.answer_callback_query(call.id, 'Товар добавлен в корзину')
-
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('size_'))
 def select_size(call):
@@ -157,6 +185,7 @@ def select_size(call):
         bot.send_photo(call.message.chat.id, product['photo'], caption=caption_text, reply_markup=markup)
     else:
         bot.answer_callback_query(call.id, 'Этот размер недоступен. Пожалуйста, выберите другой размер.')
+
 
 
 def generate_product_description(product):
