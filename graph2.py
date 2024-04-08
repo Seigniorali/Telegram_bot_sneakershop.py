@@ -70,22 +70,29 @@ def show_cart(message):
         cart_text = "Содержимое вашей корзины:\n\n"
         total_price = 0
 
+        # Создаем разметку для кнопок удаления
+        markup = types.InlineKeyboardMarkup()
+
         for index, (name, size, price) in enumerate(cart_content, start=1):
             cart_text += f"{index}. {name} - Размер: {size} - Цена: {price} тенге.\n"
             total_price += price
 
+            # Для каждого элемента в корзине добавляем кнопку, которая позволит удалить этот товар
+            removal_button = types.InlineKeyboardButton(f"Удалить {name} Размер: {size}", callback_data=f'remove_{index}')
+            markup.add(removal_button)
+
         # Проверяем, есть ли скидка для пользователя
         if user_id in user_discounts:
             discount = user_discounts[user_id]
-            total_price = total_price * (100 - discount) / 100  # Применяем скидку
+            total_price *= (1 - discount / 100)  # Применяем скидку
             cart_text += f"\nПрименён купон: скидка {discount}%.\n"
 
         cart_text += f"Итог: {total_price} тенге."
 
         # Добавляем кнопки "Очистить корзину" и "Купон"
-        markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("Очистить корзину", callback_data='clear_cart'))
         markup.add(types.InlineKeyboardButton("Купон", callback_data='apply_coupon'))
+
         bot.send_message(user_id, cart_text, reply_markup=markup)
     else:
         bot.send_message(user_id, "Ваша корзина пуста")
@@ -120,7 +127,7 @@ def apply_discount_to_cart(message, discount):
     try:
         if user_id in user_cart and user_cart[user_id]:
             total_price = 0
-            cart_text = "Содержимое вашей корзины с применённым купоном:\n\n"
+            cart_text = f"Ваша скидка составляет: {int(discount)}%\nСодержимое вашей корзины с применённым купоном:\n\n"
             for index, (name, size, price) in enumerate(user_cart[user_id], start=1):
                 discounted_price = price - (price * discount / 100)
                 cart_text += f"{index}. {name} - Размер: {size} - Цена: {discounted_price} тенге.\n"
@@ -138,7 +145,6 @@ def apply_discount_to_cart(message, discount):
 
 
 # Обработчик кнопки "Корзина"
-
 # Добавляем обработчик для кнопки "Очистить корзину"
 # Existing clear_cart function
 @bot.callback_query_handler(func=lambda call: call.data == 'clear_cart')
@@ -161,6 +167,25 @@ def clear_cart(call):
     else:
         # If the cart is already empty, just close the callback query popup
         bot.answer_callback_query(call.id, 'Ваша корзина уже пуста')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('remove_'))
+def remove_from_cart(call):
+    item_index = int(call.data.split('_')[1]) - 1
+    user_id = call.message.chat.id
+
+    # Проверяем, существует ли товар для удаления
+    if user_id in user_cart and 0 <= item_index < len(user_cart[user_id]):
+        item_to_remove = user_cart[user_id].pop(item_index)
+        bot.answer_callback_query(call.id, f"{item_to_remove[0]} Размер: {item_to_remove[1]} удален из корзины.")
+
+        # Удаляем старое сообщение с корзиной
+        bot.delete_message(user_id, call.message.message_id)
+
+        # Отправляем новое сообщение с обновленной корзиной
+        show_cart(call.message)
+    else:
+        bot.answer_callback_query(call.id, "Товар для удаления не найден.")
 
 
 @bot.message_handler(func=lambda message: message.text == "✍️ Отзывы")
