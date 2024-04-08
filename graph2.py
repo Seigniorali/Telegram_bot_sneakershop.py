@@ -20,10 +20,10 @@ def load_products_from_excel(file_path):
 
 
 # Замените 'path_to_your_excel_file.xlsx' на путь к вашему файлу
-file_path = 'C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx'  # Убедитесь, что указываете правильный путь к файлу
+file_path = 'YOUR EXCEL FILE'  # Убедитесь, что указываете правильный путь к файлу
 products = load_products_from_excel(file_path)
 
-TOKEN = '6791149409:AAEQknjj493g-4awSO0D0ztkiVG5ccqzTHs'
+TOKEN = 'TOKEN TELEGRAM'
 bot = telebot.TeleBot(TOKEN)
 
 
@@ -32,7 +32,7 @@ def to_markdown(text):
     return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True))
 
 
-genai.configure(api_key='AIzaSyBCQR7W2bN0nsWnv1zkV20XRc1Xe_hMWQM')
+genai.configure(api_key='YOUR GEMINI API KEY')
 
 model = genai.GenerativeModel('gemini-pro')
 chat = model.start_chat(history=[])
