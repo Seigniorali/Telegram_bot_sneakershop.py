@@ -4,13 +4,21 @@ from IPython.display import Markdown
 import textwrap
 from telebot import types
 import pandas as pd
+import time
+# Added import for handling Excel files directly
+import openpyxl
 
 # Словарь для хранения состояния выбора пользователя
 user_state = {}
 user_cart = {}
 # Новый словарь для хранения скидки для пользователя
 user_discounts = {}
+user_discount_name = {}
 
+
+# Load "User CRM" and "teddy_sneaker_shop" data
+user_crm_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/User CRM.xlsx"
+teddy_sneaker_shop_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"
 
 def load_products_from_excel(file_path):
     # Чтение файла Excel
@@ -20,10 +28,10 @@ def load_products_from_excel(file_path):
 
 
 # Замените 'path_to_your_excel_file.xlsx' на путь к вашему файлу
-file_path = 'YOUR EXCEL FILE'  # Убедитесь, что указываете правильный путь к файлу
+file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"  # Убедитесь, что указываете правильный путь к файлу
 products = load_products_from_excel(file_path)
 
-TOKEN = 'TOKEN TELEGRAM'
+TOKEN = '6791149409:AAEQknjj493g-4awSO0D0ztkiVG5ccqzTHs'
 bot = telebot.TeleBot(TOKEN)
 
 
@@ -32,7 +40,7 @@ def to_markdown(text):
     return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True))
 
 
-genai.configure(api_key='YOUR GEMINI API KEY')
+genai.configure(api_key='AIzaSyBCQR7W2bN0nsWnv1zkV20XRc1Xe_hMWQM')
 
 model = genai.GenerativeModel('gemini-pro')
 chat = model.start_chat(history=[])
@@ -42,8 +50,8 @@ response = chat.send_message(
 result_text = response._result.candidates[0].content.parts[0].text
 print(result_text)
 
-# Флаг для отслеживания состояния пользователя
-is_in_consultant_chat = False
+# Проверяем, была ли сохранена новая скидка
+
 
 
 @bot.message_handler(commands=['start'])
@@ -81,7 +89,7 @@ def show_cart(message):
             removal_button = types.InlineKeyboardButton(f"Удалить {name} Размер: {size}", callback_data=f'remove_{index}')
             markup.add(removal_button)
 
-        # Проверяем, есть ли скидка для пользователя
+# Проверяем, есть ли скидка для пользователя
         if user_id in user_discounts:
             discount = user_discounts[user_id]
             total_price *= (1 - discount / 100)  # Применяем скидку
@@ -92,11 +100,37 @@ def show_cart(message):
         # Добавляем кнопки "Очистить корзину" и "Купон"
         markup.add(types.InlineKeyboardButton("Очистить корзину", callback_data='clear_cart'))
         markup.add(types.InlineKeyboardButton("Купон", callback_data='apply_coupon'))
+        markup.add(types.InlineKeyboardButton("Купить", callback_data='buy'))
 
         bot.send_message(user_id, cart_text, reply_markup=markup)
     else:
         bot.send_message(user_id, "Ваша корзина пуста")
 
+
+def show_cart_with_no_discounts(message):
+    user_id = message.chat.id
+    if user_id in user_cart and user_cart[user_id]:
+        cart_content = user_cart[user_id]
+        cart_text = "Содержимое вашей корзины:\n\n"
+        total_price = sum(price for _, _, price in cart_content)
+
+        # Создаем разметку для кнопок удаления
+        markup = types.InlineKeyboardMarkup()
+        for index, (name, size, price) in enumerate(cart_content, start=1):
+            cart_text += f"{index}. {name} - Размер: {size} - Цена: {price} тенге.\n"
+            # Добавляем кнопку удаления
+            removal_button = types.InlineKeyboardButton(f"Удалить {name} Размер: {size}",
+                                                        callback_data=f'remove_{index}')
+            markup.add(removal_button)
+
+        cart_text += f"Итог: {total_price} тенге."
+        # Добавляем кнопку очистки корзины и покупки
+        markup.add(types.InlineKeyboardButton("Очистить корзину", callback_data='clear_cart'))
+        markup.add(types.InlineKeyboardButton("Купить", callback_data='buy'))
+
+        bot.send_message(user_id, cart_text, reply_markup=markup)
+    else:
+        bot.send_message(user_id, "Ваша корзина пуста")
 
 # Handle the coupon callback
 @bot.callback_query_handler(func=lambda call: call.data == 'apply_coupon')
@@ -111,23 +145,28 @@ def process_coupon_code(message):
     coupon_code = message.text.upper()  # Convert coupon to uppercase
 
     # Check coupon in the Excel file
-    df_coupons = pd.read_excel(file_path, sheet_name='sheet1')  # Adjust the sheet name if needed
-    coupon = df_coupons.loc[df_coupons['coupon'] == coupon_code]
+    df_coupons = pd.read_excel(file_path, sheet_name='Sheet1')  # Adjust the sheet name if needed
+    coupon_row = df_coupons.loc[df_coupons['coupon'] == coupon_code]
 
-    if not coupon.empty:
-        discount = coupon['percentage'].values[0]
-        apply_discount_to_cart(message, discount)  # Pass the message object to the function
+    if not coupon_row.empty:
+        # Get the coupon name and discount percentage
+        coupon_name = coupon_row['coupon'].values[0]
+        discount_percentage = coupon_row['percentage'].values[0]
+        # Call apply_discount_to_cart function with coupon name and discount
+        apply_discount_to_cart(message, discount_percentage, coupon_name)
     else:
         bot.send_message(user_id, "Купон не найден")
 
 
-def apply_discount_to_cart(message, discount):
+def apply_discount_to_cart(message, discount, coupon_name):
     user_id = message.chat.id
+    # Save the discount percentage and coupon name in user_discounts and user_discount_name dictionaries
     user_discounts[user_id] = discount
+    user_discount_name[user_id] = coupon_name  # Save the coupon name
     try:
         if user_id in user_cart and user_cart[user_id]:
             total_price = 0
-            cart_text = f"Ваша скидка составляет: {int(discount)}%\nСодержимое вашей корзины с применённым купоном:\n\n"
+            cart_text = f"Скидка {int(discount)}% была применена с использованием купона '{coupon_name}'.\nСодержимое вашей корзины:\n\n"
             for index, (name, size, price) in enumerate(user_cart[user_id], start=1):
                 discounted_price = price - (price * discount / 100)
                 cart_text += f"{index}. {name} - Размер: {size} - Цена: {discounted_price} тенге.\n"
@@ -136,11 +175,11 @@ def apply_discount_to_cart(message, discount):
             # Add clear cart button
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("Очистить корзину", callback_data='clear_cart'))
-            # Use the message object to get the message_id
+            # Update the cart message
             bot.edit_message_text(chat_id=user_id, message_id=message.message_id, text=cart_text, reply_markup=markup)
     except telebot.apihelper.ApiTelegramException as e:
         if e.error_code == 400:
-            # Если сообщение не может быть отредактировано, отправляем новое сообщение
+            # If the message cannot be edited, send a new message
             bot.send_message(user_id, cart_text, reply_markup=markup)
 
 
@@ -195,6 +234,92 @@ def send_reviews(message):
     # Отправляем сообщение с ссылкой
     bot.send_message(message.chat.id, f"Посмотрите наши отзывы здесь: {reviews_link}")
 
+def update_excel_files(user_phone, products_purchased, coupon_used=None):
+    # Load workbooks
+    user_crm_wb = openpyxl.load_workbook(user_crm_file_path)
+    teddy_sneaker_shop_wb = openpyxl.load_workbook(teddy_sneaker_shop_file_path)
+
+    # Load worksheets
+    user_crm_ws = user_crm_wb.active
+    teddy_sneaker_shop_ws = teddy_sneaker_shop_wb.active
+
+    # Update User CRM
+    phone_col_index = 1  # Assuming 'phone' is in the first column
+    product_col_index = 2  # Assuming 'product' is in the second column
+    coupon_col_index = 3  # Assuming 'coupon' is in the third column
+
+    # Convert the list of tuples to a string
+    products_string = ', '.join([f"{name} Размер: {size}" for name, size in products_purchased])
+
+    # Find the row to update based on the phone number
+    row_to_update = None
+    for row in user_crm_ws.iter_rows(min_row=2, max_col=1, values_only=True):
+        if row[0] == user_phone:
+            row_to_update = row
+            break
+
+    if row_to_update:
+        # If the user's record exists, append products to the existing record
+        current_value = user_crm_ws.cell(row=row_to_update[0].row, column=product_col_index).value
+        user_crm_ws.cell(row=row_to_update[0].row, column=product_col_index).value = f"{current_value}, {products_string}"
+        # If a coupon was used, update the coupon cell for the user
+        if coupon_used:
+            current_coupons = user_crm_ws.cell(row=row_to_update[0].row, column=coupon_col_index).value or ''
+            updated_coupons = f"{current_coupons}, {coupon_used}" if current_coupons else coupon_used
+            user_crm_ws.cell(row=row_to_update[0].row, column=coupon_col_index).value = updated_coupons
+    else:
+        # If the user's record does not exist, add a new record
+        user_crm_ws.append([user_phone, products_string, coupon_used or ''])
+
+    # Update teddy_sneaker_shop inventory
+    for product_name, product_size in products_purchased:
+        for row in teddy_sneaker_shop_ws.iter_rows(min_row=2):
+            if row[0].value == product_name and str(row[1].value) == str(product_size):
+                row[4].value = (row[4].value or 0) - 1
+                break
+
+    # Save workbooks
+    user_crm_wb.save(user_crm_file_path)
+    teddy_sneaker_shop_wb.save(teddy_sneaker_shop_file_path)
+
+# Modify the callback for the "Купить" button
+@bot.callback_query_handler(func=lambda call: call.data == 'buy')
+def handle_buy_button(call):
+    msg = bot.send_message(call.message.chat.id, "Введите ваш номер телефона для подтверждения покупки:")
+    bot.register_next_step_handler(msg, process_phone_number)
+
+
+def coupon_already_used(user_phone, coupon_name):
+    user_crm_wb = openpyxl.load_workbook(user_crm_file_path)
+    user_crm_ws = user_crm_wb.active
+    for row in user_crm_ws.iter_rows(min_row=2, values_only=True):
+        phone, _, used_coupon = row[:3]
+        if str(phone) == str(user_phone) and used_coupon == coupon_name:
+            return True
+    return False
+
+
+def process_phone_number(message):
+    user_phone = message.text
+    user_id = message.chat.id
+
+    # Проверяем, использовался ли купон ранее этим пользователем
+    if coupon_already_used(user_phone, user_discount_name.get(user_id)):
+        # Отменяем скидку и уведомляем пользователя
+        bot.send_message(user_id, "Вы уже использовали этот купон. Скидка отменена.")
+        if user_id in user_discounts:
+            del user_discounts[user_id]  # Удаляем скидку
+
+        # Пересчитываем корзину без скидки и показываем ее
+        show_cart_with_no_discounts(message)
+    else:
+        # Продолжаем с покупкой
+        bot.send_message(user_id, "Оплата прошла успешно!")
+        products_purchased = [(name, size) for name, size, price in user_cart[user_id]]
+        update_excel_files(user_phone, products_purchased, user_discount_name.get(user_id))
+        user_cart[user_id] = []  # Очищаем корзину после покупки
+        bot.send_message(user_id, "Спасибо за вашу покупку!")
+
 
 # Функция для вывода каталога
 @bot.message_handler(func=lambda message: message.text == "👟 Каталог")
@@ -211,7 +336,6 @@ def catalog(message):
 def back_to_catalog(call):
     # Удаляем текущее сообщение (с кнопкой "Назад")
     bot.delete_message(call.message.chat.id, call.message.message_id)
-
     # Обновляем текущее сообщение на сообщение с каталогом
     markup = types.InlineKeyboardMarkup()
     # Собираем уникальные модели обуви
@@ -234,8 +358,6 @@ def select_model(call):
     markup.add(types.InlineKeyboardButton("Назад", callback_data='back_to_catalog'))
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                           text="Выберите размер:", reply_markup=markup)
-
-
 # # Изменяем обработчик callback для кнопки "Добавить в корзину"
 @bot.callback_query_handler(func=lambda call: call.data.startswith('add_to_cart_'))
 def add_to_cart(call):
@@ -243,7 +365,6 @@ def add_to_cart(call):
     product_name = data_parts[3]
     product_size = data_parts[4]
     user_id = call.message.chat.id
-
     # Find the product details based on name and size
     product_details = next(
         (product for product in products if product['name'] == product_name and str(product['size']) == product_size),
@@ -251,21 +372,16 @@ def add_to_cart(call):
     if product_details:
         if user_id not in user_cart:
             user_cart[user_id] = []
-
         # Append the product details as a tuple (name, size, price)
         user_cart[user_id].append((product_name, product_size, product_details['price']))
         bot.answer_callback_query(call.id, 'Товар добавлен в корзину')
     else:
         bot.answer_callback_query(call.id, 'Ошибка: товар не найден.')
-
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith('size_'))
 def select_size(call):
     selected_size = call.data.split('_')[1]
     user_model = user_state[call.from_user.id]['model']
-    product = next((item for item in products if item['name'] == user_model and str(item['size']) == selected_size),
-                   None)
-
+    product = next((item for item in products if item['name'] == user_model and str(item['size']) == selected_size), None)
     if product:
         # Отправляем новую подпись к фотографии с описанием и кнопкой "Назад"
         description = generate_product_description(product)
@@ -282,8 +398,6 @@ def select_size(call):
         bot.send_photo(call.message.chat.id, product['photo'], caption=caption_text, reply_markup=markup)
     else:
         bot.answer_callback_query(call.id, 'Этот размер недоступен. Пожалуйста, выберите другой размер.')
-
-
 def generate_product_description(product):
     try:
         # Отправка запроса на генерацию описания товара с использованием языковой модели
@@ -292,8 +406,6 @@ def generate_product_description(product):
         return result_text
     except genai.types.generation_types.BlockedPromptException as e:
         return "К сожалению, не удалось сгенерировать описание товара. Пожалуйста, обратитесь к консультанту."
-
-
 # Функция для начала чата с консультантом
 @bot.message_handler(func=lambda message: message.text == "🤖 Консультант")
 def consul(message):
@@ -317,7 +429,6 @@ def consul(message):
     except genai.types.generation_types.BlockedPromptException as e:
         # Если сообщение заблокировано, отправляем сообщение об этом
         bot.send_message(message.chat.id, "Извините, я не понимаю вас.")
-
 
 # Обработчик всех входящих сообщений
 @bot.message_handler(func=lambda message: True)
@@ -343,7 +454,6 @@ def handle_messages(message):
     else:
         # Если пользователь не находится в режиме чата с консультантом, обрабатываем его сообщения как обычно
         bot.send_message(message.chat.id, "Выберите опцию из меню.")
-
 
 # Запуск бота
 bot.polling(none_stop=True, interval=0)
