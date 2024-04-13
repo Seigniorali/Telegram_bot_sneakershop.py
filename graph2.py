@@ -17,8 +17,8 @@ user_discount_name = {}
 
 
 # Load "User CRM" and "teddy_sneaker_shop" data
-user_crm_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"
-teddy_sneaker_shop_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"
+user_crm_file_path = "User CRM.xlsx"
+teddy_sneaker_shop_file_path = "teddy_sneaker_shop.xlsx"
 
 def load_products_from_excel(file_path):
     # Чтение файла Excel
@@ -31,7 +31,7 @@ def load_products_from_excel(file_path):
 file_path = "teddy_sneaker_shop.xlsx"  # Убедитесь, что указываете правильный путь к файлу
 products = load_products_from_excel(file_path)
 
-TOKEN = '6791149409:AAEQknjj493g-4awSO0D0ztkiVG5ccqzTHs'
+TOKEN = 'YOUR_TELEGRAM_TOKEN'
 bot = telebot.TeleBot(TOKEN)
 
 
@@ -40,7 +40,7 @@ def to_markdown(text):
     return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True))
 
 
-genai.configure(api_key='AIzaSyBCQR7W2bN0nsWnv1zkV20XRc1Xe_hMWQM')
+genai.configure(api_key='YOUR_GEMINI_API_KEY')
 
 model = genai.GenerativeModel('gemini-pro')
 chat = model.start_chat(history=[])
