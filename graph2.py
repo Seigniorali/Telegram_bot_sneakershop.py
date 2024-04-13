@@ -17,7 +17,7 @@ user_discount_name = {}
 
 
 # Load "User CRM" and "teddy_sneaker_shop" data
-user_crm_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/User CRM.xlsx"
+user_crm_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"
 teddy_sneaker_shop_file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"
 
 def load_products_from_excel(file_path):
@@ -28,7 +28,7 @@ def load_products_from_excel(file_path):
 
 
 # Замените 'path_to_your_excel_file.xlsx' на путь к вашему файлу
-file_path = "C:/Users/alial/OneDrive - Astana IT University/Рабочий стол/Практика 3 курс/6 - 7 день/teddy_sneaker_shop.xlsx"  # Убедитесь, что указываете правильный путь к файлу
+file_path = "teddy_sneaker_shop.xlsx"  # Убедитесь, что указываете правильный путь к файлу
 products = load_products_from_excel(file_path)
 
 TOKEN = '6791149409:AAEQknjj493g-4awSO0D0ztkiVG5ccqzTHs'
@@ -235,52 +235,59 @@ def send_reviews(message):
     bot.send_message(message.chat.id, f"Посмотрите наши отзывы здесь: {reviews_link}")
 
 def update_excel_files(user_phone, products_purchased, coupon_used=None):
-    # Load workbooks
+    # Загрузка рабочих книг и листов
     user_crm_wb = openpyxl.load_workbook(user_crm_file_path)
     teddy_sneaker_shop_wb = openpyxl.load_workbook(teddy_sneaker_shop_file_path)
 
-    # Load worksheets
+    # Загрузка активных листов
     user_crm_ws = user_crm_wb.active
     teddy_sneaker_shop_ws = teddy_sneaker_shop_wb.active
 
-    # Update User CRM
-    phone_col_index = 1  # Assuming 'phone' is in the first column
-    product_col_index = 2  # Assuming 'product' is in the second column
-    coupon_col_index = 3  # Assuming 'coupon' is in the third column
+    # Обновление данных CRM пользователя
+    phone_col_index = 1  # 'phone' предполагается быть в первой колонке
+    product_col_index = 2  # 'product' во второй колонке
+    coupon_col_index = 3  # 'coupon' в третьей колонке
 
-    # Convert the list of tuples to a string
+    # Преобразование списка купленных товаров в строку
     products_string = ', '.join([f"{name} Размер: {size}" for name, size in products_purchased])
 
-    # Find the row to update based on the phone number
-    row_to_update = None
-    for row in user_crm_ws.iter_rows(min_row=2, max_col=1, values_only=True):
+    # Поиск строки для обновления на основе номера телефона
+    row_to_update_index = None
+    for index, row in enumerate(user_crm_ws.iter_rows(min_row=2, min_col=phone_col_index, max_col=phone_col_index, values_only=True), start=2):
         if row[0] == user_phone:
-            row_to_update = row
+            row_to_update_index = index
             break
 
-    if row_to_update:
-        # If the user's record exists, append products to the existing record
-        current_value = user_crm_ws.cell(row=row_to_update[0].row, column=product_col_index).value
-        user_crm_ws.cell(row=row_to_update[0].row, column=product_col_index).value = f"{current_value}, {products_string}"
-        # If a coupon was used, update the coupon cell for the user
+    if row_to_update_index:
+        # Обновляем данные в найденной строке
+        current_products = user_crm_ws.cell(row=row_to_update_index, column=product_col_index).value or ''
+        new_products = f"{current_products}, {products_string}" if current_products else products_string
+        user_crm_ws.cell(row=row_to_update_index, column=product_col_index).value = new_products
+
+        # Если был использован купон, обновляем ячейку купона для пользователя
         if coupon_used:
-            current_coupons = user_crm_ws.cell(row=row_to_update[0].row, column=coupon_col_index).value or ''
-            updated_coupons = f"{current_coupons}, {coupon_used}" if current_coupons else coupon_used
-            user_crm_ws.cell(row=row_to_update[0].row, column=coupon_col_index).value = updated_coupons
+            current_coupons = user_crm_ws.cell(row=row_to_update_index, column=coupon_col_index).value or ''
+            new_coupons = f"{current_coupons}, {coupon_used}" if current_coupons else coupon_used
+            user_crm_ws.cell(row=row_to_update_index, column=coupon_col_index).value = new_coupons
     else:
-        # If the user's record does not exist, add a new record
+        # Если запись пользователя не существует, добавляем новую запись
         user_crm_ws.append([user_phone, products_string, coupon_used or ''])
 
-    # Update teddy_sneaker_shop inventory
+    # Обновление инвентаря teddy_sneaker_shop
     for product_name, product_size in products_purchased:
         for row in teddy_sneaker_shop_ws.iter_rows(min_row=2):
             if row[0].value == product_name and str(row[1].value) == str(product_size):
                 row[4].value = (row[4].value or 0) - 1
                 break
 
-    # Save workbooks
+    # Сохранение рабочих книг
     user_crm_wb.save(user_crm_file_path)
     teddy_sneaker_shop_wb.save(teddy_sneaker_shop_file_path)
+    # Закрытие файлов после сохранения
+    user_crm_wb.close()
+    teddy_sneaker_shop_wb.close()
+
+
 
 # Modify the callback for the "Купить" button
 @bot.callback_query_handler(func=lambda call: call.data == 'buy')
@@ -293,32 +300,40 @@ def coupon_already_used(user_phone, coupon_name):
     user_crm_wb = openpyxl.load_workbook(user_crm_file_path)
     user_crm_ws = user_crm_wb.active
     for row in user_crm_ws.iter_rows(min_row=2, values_only=True):
-        phone, _, used_coupon = row[:3]
-        if str(phone) == str(user_phone) and used_coupon == coupon_name:
-            return True
+        phone, _, used_coupons = row[:3]
+        if str(phone) == str(user_phone):
+            if used_coupons:  # Check if used_coupons is not None
+                # Разделяем использованные купоны по запятой и проверяем каждый
+                for c in (c.strip() for c in used_coupons.split(',')):
+                    if coupon_name == c:
+                        return True
     return False
 
 
 def process_phone_number(message):
-    user_phone = message.text
+    user_phone = message.text.strip()
     user_id = message.chat.id
 
-    # Проверяем, использовался ли купон ранее этим пользователем
-    if coupon_already_used(user_phone, user_discount_name.get(user_id)):
-        # Отменяем скидку и уведомляем пользователя
+    # Если имя купона есть в user_discount_name, но скидка уже использована, удаляем её
+    coupon_name = user_discount_name.get(user_id, '')
+    if coupon_name and coupon_already_used(user_phone, coupon_name):
         bot.send_message(user_id, "Вы уже использовали этот купон. Скидка отменена.")
-        if user_id in user_discounts:
-            del user_discounts[user_id]  # Удаляем скидку
+        user_discounts.pop(user_id, None)  # Удаляем скидку из словаря, если она есть
 
-        # Пересчитываем корзину без скидки и показываем ее
-        show_cart_with_no_discounts(message)
-    else:
-        # Продолжаем с покупкой
-        bot.send_message(user_id, "Оплата прошла успешно!")
-        products_purchased = [(name, size) for name, size, price in user_cart[user_id]]
-        update_excel_files(user_phone, products_purchased, user_discount_name.get(user_id))
-        user_cart[user_id] = []  # Очищаем корзину после покупки
-        bot.send_message(user_id, "Спасибо за вашу покупку!")
+    # Продолжаем процесс покупки в любом случае
+    bot.send_message(user_id, "Оплата прошла успешно!")
+    products_purchased = [(name, size) for name, size, price in user_cart[user_id]]
+
+    # Если купон был использован, не передаем его в update_excel_files
+    coupon_for_excel = coupon_name if user_discounts.get(user_id) is not None else None
+    update_excel_files(user_phone, products_purchased, coupon_for_excel)
+
+    user_cart[user_id] = []  # Очищаем корзину после покупки
+    bot.send_message(user_id, "Спасибо за вашу покупку!")
+
+
+
+
 
 
 # Функция для вывода каталога
@@ -429,7 +444,6 @@ def consul(message):
     except genai.types.generation_types.BlockedPromptException as e:
         # Если сообщение заблокировано, отправляем сообщение об этом
         bot.send_message(message.chat.id, "Извините, я не понимаю вас.")
-
 # Обработчик всех входящих сообщений
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
